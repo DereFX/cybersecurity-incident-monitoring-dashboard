@@ -1,0 +1,150 @@
+{
+  "model_version": "network-random-forest-v1",
+  "trained_at_utc": "2026-10-10T14:12:13.676416+00:00",
+  "training_source": "unsw_nb15_network_events_quickstart.csv",
+  "training_source_sha256": "4f507a28d2489fc04fa8f2607a76447f16c52fa5d45fd2c8fa0d86d17ebf4390",
+  "random_state": 42,
+  "split": {
+    "training_rows": 2666,
+    "validation_rows": 889,
+    "test_rows": 889
+  },
+  "decision_threshold": 0.8799999999999999,
+  "minimum_validation_recall_target": 0.95,
+  "test_metrics": {
+    "rows": 889,
+    "true_positives": 751,
+    "false_positives": 0,
+    "false_negatives": 38,
+    "true_negatives": 100,
+    "accuracy": 0.9572553430821147,
+    "precision": 1.0,
+    "recall": 0.9518377693282636,
+    "f1": 0.9753246753246754
+  },
+  "rule_baseline_on_same_test_split": {
+    "rows": 889,
+    "true_positives": 113,
+    "false_positives": 16,
+    "false_negatives": 676,
+    "true_negatives": 84,
+    "accuracy": 0.2215973003374578,
+    "precision": 0.875968992248062,
+    "recall": 0.1432192648922687,
+    "f1": 0.24618736383442266
+  },
+  "model_features": [
+    "dur",
+    "spkts",
+    "dpkts",
+    "sbytes",
+    "dbytes",
+    "rate",
+    "sttl",
+    "dttl",
+    "sload",
+    "dload",
+    "sloss",
+    "dloss",
+    "sinpkt",
+    "dinpkt",
+    "sjit",
+    "djit",
+    "tcprtt",
+    "synack",
+    "ackdat",
+    "ct_srv_src",
+    "ct_state_ttl",
+    "ct_dst_ltm",
+    "ct_src_ltm",
+    "ct_src_dport_ltm",
+    "ct_dst_sport_ltm",
+    "ct_dst_src_ltm",
+    "is_ftp_login",
+    "ct_ftp_cmd",
+    "ct_flw_http_mthd",
+    "ct_srv_dst",
+    "is_sm_ips_ports",
+    "proto",
+    "service",
+    "state"
+  ],
+  "excluded_label_columns": [
+    "label",
+    "attack_cat"
+  ],
+  "excluded_identity_columns": [
+    "id",
+    "event_timestamp",
+    "source_ip",
+    "destination_ip"
+  ],
+  "top_feature_importances": [
+    {
+      "feature": "numeric__spkts",
+      "importance": 0.48215780599418195
+    },
+    {
+      "feature": "numeric__sbytes",
+      "importance": 0.2875175608056463
+    },
+    {
+      "feature": "numeric__dbytes",
+      "importance": 0.011283878899356014
+    },
+    {
+      "feature": "numeric__dload",
+      "importance": 0.011126159374975412
+    },
+    {
+      "feature": "numeric__dinpkt",
+      "importance": 0.010958693874022839
+    },
+    {
+      "feature": "numeric__sjit",
+      "importance": 0.010602506125328676
+    },
+    {
+      "feature": "numeric__rate",
+      "importance": 0.010576035820700574
+    },
+    {
+      "feature": "numeric__tcprtt",
+      "importance": 0.01032636338605921
+    },
+    {
+      "feature": "numeric__sload",
+      "importance": 0.010222617766739822
+    },
+    {
+      "feature": "numeric__synack",
+      "importance": 0.009726526470737075
+    },
+    {
+      "feature": "numeric__ackdat",
+      "importance": 0.009689105460976953
+    },
+    {
+      "feature": "numeric__dttl",
+      "importance": 0.009647387792335248
+    },
+    {
+      "feature": "numeric__dur",
+      "importance": 0.009215128650270714
+    },
+    {
+      "feature": "numeric__sinpkt",
+      "importance": 0.009171193782249893
+    },
+    {
+      "feature": "numeric__djit",
+      "importance": 0.009077448263850258
+    }
+  ],
+  "limitations": [
+    "Metrics apply only to the held-out portion of the supplied quickstart dataset.",
+    "The supplied files are representative generated data, not verbatim official UNSW-NB15 records.",
+    "A low classification threshold improves recall but can increase false positives.",
+    "Performance on live organizational traffic requires separate validation and monitoring."
+  ]
+}

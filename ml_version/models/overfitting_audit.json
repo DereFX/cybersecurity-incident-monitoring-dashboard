@@ -1,0 +1,180 @@
+{
+  "model_version": "network-random-forest-v1",
+  "decision_threshold": 0.8799999999999999,
+  "random_split_metrics": {
+    "training": {
+      "rows": 2666,
+      "true_positives": 2302,
+      "false_positives": 0,
+      "false_negatives": 64,
+      "true_negatives": 300,
+      "accuracy": 0.9759939984996249,
+      "precision": 1.0,
+      "recall": 0.9729501267962807,
+      "f1": 0.9862896315338475
+    },
+    "validation": {
+      "rows": 889,
+      "true_positives": 755,
+      "false_positives": 0,
+      "false_negatives": 34,
+      "true_negatives": 100,
+      "accuracy": 0.9617547806524185,
+      "precision": 1.0,
+      "recall": 0.9569074778200254,
+      "f1": 0.977979274611399
+    },
+    "test": {
+      "rows": 889,
+      "true_positives": 751,
+      "false_positives": 0,
+      "false_negatives": 38,
+      "true_negatives": 100,
+      "accuracy": 0.9572553430821147,
+      "precision": 1.0,
+      "recall": 0.9518377693282636,
+      "f1": 0.9753246753246754
+    }
+  },
+  "training_minus_test_f1_gap": 0.01096495620917215,
+  "duplicate_audit": {
+    "exact_duplicate_feature_rows_in_full_dataset": 0,
+    "train_validation_feature_hash_overlap": 0,
+    "train_test_feature_hash_overlap": 0
+  },
+  "nested_five_fold_results": [
+    {
+      "fold": 1,
+      "threshold": 0.8549999999999999,
+      "rows": 889,
+      "true_positives": 758,
+      "false_positives": 0,
+      "false_negatives": 31,
+      "true_negatives": 100,
+      "accuracy": 0.9651293588301463,
+      "precision": 1.0,
+      "recall": 0.9607097591888466,
+      "f1": 0.9799612152553329
+    },
+    {
+      "fold": 2,
+      "threshold": 0.835,
+      "rows": 889,
+      "true_positives": 759,
+      "false_positives": 0,
+      "false_negatives": 30,
+      "true_negatives": 100,
+      "accuracy": 0.9662542182227222,
+      "precision": 1.0,
+      "recall": 0.9619771863117871,
+      "f1": 0.9806201550387597
+    },
+    {
+      "fold": 3,
+      "threshold": 0.8899999999999999,
+      "rows": 889,
+      "true_positives": 742,
+      "false_positives": 0,
+      "false_negatives": 47,
+      "true_negatives": 100,
+      "accuracy": 0.9471316085489314,
+      "precision": 1.0,
+      "recall": 0.9404309252217997,
+      "f1": 0.969301110385369
+    },
+    {
+      "fold": 4,
+      "threshold": 0.84,
+      "rows": 889,
+      "true_positives": 759,
+      "false_positives": 0,
+      "false_negatives": 30,
+      "true_negatives": 100,
+      "accuracy": 0.9662542182227222,
+      "precision": 1.0,
+      "recall": 0.9619771863117871,
+      "f1": 0.9806201550387597
+    },
+    {
+      "fold": 5,
+      "threshold": 0.8499999999999999,
+      "rows": 888,
+      "true_positives": 763,
+      "false_positives": 0,
+      "false_negatives": 25,
+      "true_negatives": 100,
+      "accuracy": 0.9718468468468469,
+      "precision": 1.0,
+      "recall": 0.9682741116751269,
+      "f1": 0.9838813668600903
+    }
+  ],
+  "nested_five_fold_summary": {
+    "accuracy": {
+      "mean": 0.9633232501342738,
+      "standard_deviation": 0.00842928389175601,
+      "minimum": 0.9471316085489314,
+      "maximum": 0.9718468468468469
+    },
+    "precision": {
+      "mean": 1.0,
+      "standard_deviation": 0.0,
+      "minimum": 1.0,
+      "maximum": 1.0
+    },
+    "recall": {
+      "mean": 0.9586738337418694,
+      "standard_deviation": 0.009496718554273729,
+      "minimum": 0.9404309252217997,
+      "maximum": 0.9682741116751269
+    },
+    "f1": {
+      "mean": 0.9788768005156623,
+      "standard_deviation": 0.004979840380598562,
+      "minimum": 0.969301110385369,
+      "maximum": 0.9838813668600903
+    }
+  },
+  "chronological_holdout": {
+    "training_rows": 2666,
+    "validation_rows": 889,
+    "test_rows": 889,
+    "threshold": 0.8649999999999999,
+    "metrics": {
+      "rows": 889,
+      "true_positives": 745,
+      "false_positives": 0,
+      "false_negatives": 44,
+      "true_negatives": 100,
+      "accuracy": 0.9505061867266592,
+      "precision": 1.0,
+      "recall": 0.944233206590621,
+      "f1": 0.9713168187744459
+    }
+  },
+  "unseen_development_file": {
+    "full_file_rows": 15000,
+    "overlapping_rows_removed": 4444,
+    "development_only_rows": 10556,
+    "development_only_metrics": {
+      "rows": 10556,
+      "true_positives": 5500,
+      "false_positives": 0,
+      "false_negatives": 296,
+      "true_negatives": 4760,
+      "accuracy": 0.9719590754073513,
+      "precision": 1.0,
+      "recall": 0.9489302967563837,
+      "f1": 0.9737960339943342
+    },
+    "exact_feature_hash_overlap_with_quickstart": 4444,
+    "event_id_overlap_with_quickstart": 4444,
+    "provenance_warning": "Metrics exclude all event IDs present in quickstart. The remaining rows were generated for the same prototype and are not the official UNSW-NB15 test set."
+  },
+  "assessment": {
+    "large_train_test_gap": false,
+    "unstable_cross_validation": false,
+    "exact_train_test_duplicate_leakage_detected": false,
+    "important_limitation": "Random, chronological, cross-validation, and development-only checks all use representative data from the same prototype generator. Official UNSW-NB15 test data or real deployment traffic is still required to establish external generalization."
+  }
+}

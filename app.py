@@ -79,4 +79,19 @@ latest = mysql_rows(
     ORDER BY i.incident_time DESC LIMIT 20
     """
 )
-st.dataframe(latest, width="stretch", hide_index=True)
+latest_frame = pd.DataFrame(latest)
+if latest_frame.empty:
+    st.info("No incidents have been created yet.")
+else:
+    def highlight_high_severity_id(row: pd.Series) -> list[str]:
+        """Highlight only the incident ID when its severity is high."""
+
+        return [
+            "color: #ff4b4b; font-weight: 700" if (
+                column == "incident_id" and str(row["severity"]).lower() == "high"
+            ) else ""
+            for column in latest_frame.columns
+        ]
+
+    styled_latest = latest_frame.style.apply(highlight_high_severity_id, axis=1)
+    st.dataframe(styled_latest, width="stretch", hide_index=True)
