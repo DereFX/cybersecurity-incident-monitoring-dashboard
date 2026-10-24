@@ -21,17 +21,26 @@ class AssignmentService:
             cursor = connection.cursor()
             try:
                 cursor.execute(
-                    "SELECT 1 FROM incidents WHERE incident_id = %s FOR UPDATE",
+                    "SELECT status FROM incidents WHERE incident_id = %s FOR UPDATE",
                     (incident_id,),
                 )
-                if cursor.fetchone() is None:
+                incident = cursor.fetchone()
+                if incident is None:
                     raise ValueError("Incident not found")
+                old_status = str(incident[0])
+                if old_status in {"resolved", "false_positive"}:
+                    raise ValueError("Reopen this incident before assigning an analyst")
                 cursor.execute(
                     "SELECT 1 FROM analysts WHERE analyst_id = %s AND active = TRUE",
                     (analyst_id,),
                 )
                 if cursor.fetchone() is None:
                     raise ValueError("Active analyst not found")
+                cursor.execute("SELECT assignment_id, analyst_id FROM assignments WHERE incident_id=%s AND resolved_at IS NULL ORDER BY assignment_id DESC LIMIT 1", (incident_id,))
+                current = cursor.fetchone()
+                if current and int(current[1]) == analyst_id:
+                    return int(current[0])
+                cursor.execute("UPDATE assignments SET resolved_at=UTC_TIMESTAMP(6) WHERE incident_id=%s AND resolved_at IS NULL", (incident_id,))
                 cursor.execute(
                     """
                     INSERT INTO assignments (incident_id, analyst_id, comments)
@@ -47,10 +56,10 @@ class AssignmentService:
                 cursor.execute(
                     """
                     INSERT INTO incident_audit_log
-                        (incident_id, analyst_id, action, new_status, notes)
-                    VALUES (%s, %s, 'assigned', 'assigned', %s)
+                        (incident_id, analyst_id, action, old_status, new_status, notes)
+                    VALUES (%s, %s, 'assigned', %s, 'assigned', %s)
                     """,
-                    (incident_id, analyst_id, comments or None),
+                    (incident_id, analyst_id, old_status, comments or None),
                 )
                 return assignment_id
             finally:
@@ -76,19 +85,31 @@ class AssignmentService:
                 if row is None:
                     raise ValueError("Incident not found")
                 old_status = str(row[0])
+                if analyst_id is not None:
+                    cursor.execute("SELECT 1 FROM analysts WHERE analyst_id=%s AND active=TRUE", (analyst_id,))
+                    if cursor.fetchone() is None:
+                        raise ValueError("Active analyst not found")
+                if old_status == new_status:
+                    return
+                if new_status in {"assigned", "investigating"}:
+                    cursor.execute("SELECT 1 FROM assignments WHERE incident_id=%s AND resolved_at IS NULL LIMIT 1", (incident_id,))
+                    if cursor.fetchone() is None:
+                        raise ValueError("Assign an analyst before starting investigation")
                 cursor.execute(
                     """
                     UPDATE incidents
                     SET status = %s,
                         resolved_at = CASE
                             WHEN %s IN ('resolved', 'false_positive')
-                            THEN CURRENT_TIMESTAMP(6)
+                            THEN UTC_TIMESTAMP(6)
                             ELSE NULL
                         END
                     WHERE incident_id = %s
                     """,
                     (new_status, new_status, incident_id),
                 )
+                if new_status in {"resolved", "false_positive", "open"}:
+                    cursor.execute("UPDATE assignments SET resolved_at=UTC_TIMESTAMP(6) WHERE incident_id=%s AND resolved_at IS NULL", (incident_id,))
                 cursor.execute(
                     """
                     INSERT INTO incident_audit_log
@@ -108,17 +129,27 @@ class AssignmentService:
         with self.database.transaction() as connection:
             cursor = connection.cursor()
             try:
+                cursor.execute("SELECT status FROM incidents WHERE incident_id=%s FOR UPDATE", (incident_id,))
+                incident = cursor.fetchone()
+                if incident is None:
+                    raise ValueError("Incident not found")
+                if incident[0] in {"resolved", "false_positive"}:
+                    raise ValueError("Reopen this incident before recording a response")
+                cursor.execute("SELECT 1 FROM analysts WHERE analyst_id=%s AND active=TRUE", (analyst_id,))
+                if cursor.fetchone() is None:
+                    raise ValueError("Active analyst not found")
+                cursor.execute("SELECT assignment_id FROM assignments WHERE incident_id=%s AND analyst_id=%s AND resolved_at IS NULL ORDER BY assignment_id DESC LIMIT 1", (incident_id, analyst_id))
+                assignment = cursor.fetchone()
+                if assignment is None:
+                    raise ValueError("No active assignment found for this analyst")
                 cursor.execute(
                     """
                     UPDATE assignments
                     SET response_action = %s, comments = %s
-                    WHERE incident_id = %s AND analyst_id = %s AND resolved_at IS NULL
-                    ORDER BY assignment_id DESC LIMIT 1
+                    WHERE assignment_id = %s
                     """,
-                    (response_action, comments or None, incident_id, analyst_id),
+                    (response_action, comments or None, int(assignment[0])),
                 )
-                if cursor.rowcount == 0:
-                    raise ValueError("No active assignment found for this analyst")
                 cursor.execute(
                     """
                     INSERT INTO incident_audit_log

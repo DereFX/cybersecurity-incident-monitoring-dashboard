@@ -28,11 +28,11 @@ ORDER BY incident_count DESC
 
 AVERAGE_RESPONSE_TIME = """
 SELECT tc.category_name,
-       AVG(TIMESTAMPDIFF(SECOND, i.incident_time, i.resolved_at)) AS avg_seconds,
+       AVG(TIMESTAMPDIFF(SECOND, i.created_at, i.resolved_at)) AS avg_seconds,
        COUNT(*) AS resolved_count
 FROM incidents i
 JOIN threat_categories tc ON tc.category_id = i.category_id
-WHERE i.resolved_at IS NOT NULL
+WHERE i.status = 'resolved' AND i.resolved_at >= i.created_at
 GROUP BY tc.category_name
 ORDER BY avg_seconds DESC
 """
@@ -56,9 +56,11 @@ ORDER BY incident_count DESC, s.hostname
 ANALYST_WORKLOAD = """
 SELECT a.analyst_id, a.name,
        COUNT(assn.assignment_id) AS total_assignments,
-       SUM(assn.resolved_at IS NULL) AS active_assignments
+       SUM(assn.assignment_id IS NOT NULL AND assn.resolved_at IS NULL
+           AND i.status IN ('assigned','investigating')) AS active_assignments
 FROM analysts a
 LEFT JOIN assignments assn ON assn.analyst_id = a.analyst_id
+LEFT JOIN incidents i ON i.incident_id = assn.incident_id
 GROUP BY a.analyst_id, a.name
 ORDER BY active_assignments DESC, total_assignments DESC
 """

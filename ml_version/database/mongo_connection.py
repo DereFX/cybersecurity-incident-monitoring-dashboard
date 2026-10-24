@@ -37,6 +37,8 @@ class MongoDatabase:
         alerts.create_index("detection_key", unique=True, name="uq_detection_key")
         alerts.create_index([("timestamp", DESCENDING)], name="ix_alert_timestamp")
         alerts.create_index([("severity", ASCENDING), ("timestamp", DESCENDING)], name="ix_alert_severity_time")
+        self.database.ingestion_uploads.create_index([("hidden", ASCENDING), ("uploaded_at", DESCENDING)], name="ix_upload_visibility_time")
+        self.database.ingestion_runs.create_index([("upload_id", ASCENDING), ("started_at", DESCENDING)], name="ix_upload_runs")
 
     def close(self) -> None:
         self._client.close()
