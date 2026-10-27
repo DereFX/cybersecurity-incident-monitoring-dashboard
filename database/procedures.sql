@@ -13,8 +13,8 @@ BEGIN
         SUM(i.severity IN ('high', 'critical')) AS high_or_critical_incidents,
         MAX(i.incident_time) AS latest_incident_time,
         AVG(
-            CASE WHEN i.resolved_at IS NOT NULL
-                THEN TIMESTAMPDIFF(SECOND, i.incident_time, i.resolved_at)
+            CASE WHEN i.status='resolved' AND i.resolved_at >= i.created_at
+                THEN TIMESTAMPDIFF(SECOND, i.created_at, i.resolved_at)
             END
         ) AS average_resolution_seconds
     FROM users u
@@ -51,16 +51,19 @@ BEGIN
     END IF;
 
     UPDATE incidents
-    SET status = 'resolved', resolved_at = CURRENT_TIMESTAMP(6)
+    SET status = 'resolved', resolved_at = COALESCE(resolved_at, UTC_TIMESTAMP(6))
     WHERE incident_id = p_incident_id;
 
     UPDATE assignments
-    SET resolved_at = CURRENT_TIMESTAMP(6),
+    SET resolved_at = UTC_TIMESTAMP(6),
         response_action = p_response_action,
         comments = p_comments
     WHERE incident_id = p_incident_id
       AND analyst_id = p_analyst_id
       AND resolved_at IS NULL;
+
+    UPDATE assignments SET resolved_at=UTC_TIMESTAMP(6)
+    WHERE incident_id=p_incident_id AND resolved_at IS NULL;
 
     INSERT INTO incident_audit_log
         (incident_id, analyst_id, action, old_status, new_status, notes)

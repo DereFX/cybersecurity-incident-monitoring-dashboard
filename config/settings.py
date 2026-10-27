@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -21,7 +22,8 @@ class Settings:
 
     @classmethod
     def from_env(cls) -> "Settings":
-        load_dotenv()
+        project_root = Path(__file__).resolve().parents[1]
+        load_dotenv(project_root / ".env")
         return cls(
             mysql_host=os.getenv("MYSQL_HOST", "localhost"),
             mysql_port=int(os.getenv("MYSQL_PORT", "3306")),
@@ -32,4 +34,3 @@ class Settings:
             mongodb_database=os.getenv("MONGODB_DATABASE", "cyber_soc"),
             log_level=os.getenv("LOG_LEVEL", "INFO").upper(),
         )
-

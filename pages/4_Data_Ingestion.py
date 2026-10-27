@@ -1,27 +1,56 @@
 from __future__ import annotations
 
 from pathlib import Path
+from hashlib import sha256
+from uuid import uuid4
 
-import pandas as pd
 import streamlit as st
 
-from etl.authentication_loader import load_authentication_csv
-from etl.network_loader import load_network_csv
+from detection.ml_network import DEFAULT_MODEL_PATH, load_model_bundle
+from etl.authentication_loader import load_authentication_frame
+from etl.demo_data import authentication_demo_csv
+from etl.upload_history import UploadHistory, namespace_upload_events
+from etl.network_loader import load_network_frame
+from etl.tabular_reader import MAX_UPLOAD_BYTES, read_security_table, workbook_sheets
 from etl.pipeline import process_events, run_pipeline
 from etl.schema_detection import detect_dataset_type, safe_source_name
 from etl.models import DatasetValidationError
-from ui.resources import get_mongo, get_mysql, mysql_rows
+from ui.resources import get_mongo, get_mysql
 from ui.theme import configure_page
+from ui.upload_history import render_upload_history
 
 configure_page("Data Ingestion & Detection Configuration", "📥")
+
+if notice := st.session_state.pop("last_import_notice", None):
+    st.success(notice)
+render_upload_history()
+st.divider()
+
+with st.expander("Guided synthetic demonstration", expanded=False):
+    st.write("Create a small synthetic CSV and follow the complete import-to-response workflow.")
+    st.markdown("""
+    1. Download the synthetic CSV below and upload it using the uploader on this page.
+    2. Keep defaults: 5 failed logins / 5 minutes and 3 access origins / 10 minutes.
+    3. Validate, import and detect. On the first import, expect 12 events, 2 alerts and 2 incidents.
+    4. Check the MongoDB and MySQL evidence tabs after import.
+    5. In Incident Response, select this upload's dataset, assign a case, record a response, then resolve it.
+    6. Return to Command Center to see resolution and analyst workload change. Reimporting the same file should create no duplicates.
+    """)
+    if "guided_demo_csv" not in st.session_state or st.button("Generate a fresh synthetic demo"):
+        run_id = uuid4().hex[:12]
+        st.session_state["guided_demo_csv"] = authentication_demo_csv(run_id)
+        st.session_state["guided_demo_filename"] = f"synthetic_soc_demo_{run_id}.csv"
+    st.download_button("Download synthetic demo CSV", st.session_state["guided_demo_csv"],
+                       st.session_state["guided_demo_filename"], "text/csv", type="primary")
+    st.caption("Synthetic users and documentation-only IP addresses. The control user has four failures and should generate no alert at the defaults.")
 
 st.markdown(
     """
     <div class="pipeline-flow">
-      <div class="pipeline-step done"><strong>1 · CSV</strong><span>Upload and identify the supported schema</span></div>
+      <div class="pipeline-step done"><strong>1 · CSV / Excel</strong><span>Upload and identify the supported schema</span></div>
       <div class="pipeline-step done"><strong>2 · Validate</strong><span>Check columns, IDs, timestamps and duplicates</span></div>
       <div class="pipeline-step done"><strong>3 · MongoDB</strong><span>Save normalized events in security_events</span></div>
-      <div class="pipeline-step done"><strong>4 · Detect</strong><span>Run explainable Python security rules</span></div>
+      <div class="pipeline-step done"><strong>4 · Detect</strong><span>Run authentication rules or the trained network model</span></div>
       <div class="pipeline-step done"><strong>5 · MySQL</strong><span>Create deduplicated incidents and audit records</span></div>
     </div>
     """,
@@ -30,7 +59,7 @@ st.markdown(
 
 st.write(
     "Run the inspected quickstart datasets through validation, MongoDB storage, "
-    "Python detection, and MySQL incident creation. The operation is idempotent."
+    "rule/model detection, and MySQL incident creation. The operation is idempotent."
 )
 
 root = Path(__file__).resolve().parents[1]
@@ -49,37 +78,62 @@ if quickstart:
             )
             st.success("Pipeline completed successfully.")
             st.json(summary.to_dict())
+            from ui.existing_sources import existing_source_counts
+            existing_source_counts.clear()
         except Exception as error:
             st.error(f"Pipeline failed: {error}")
 
 st.divider()
-st.subheader("CSV upload")
+st.subheader("CSV or Excel upload")
 st.write(
-    "Upload an authentication or network CSV matching the inspected schemas. "
+    "Upload an authentication or network CSV or Excel (.xlsx) file matching the inspected schemas. "
     "The file is validated in memory and is not saved to disk. Maximum size: 25 MB."
 )
 
-uploaded = st.file_uploader("Choose a CSV file", type=["csv"], accept_multiple_files=False)
+st.caption("Excel: select one worksheet, with column names in row 1. Use values, not formulas. Save older .xls files as .xlsx. Each worksheet is tracked separately.")
+uploaded = st.file_uploader("Choose a CSV or Excel file", type=["csv", "xlsx"], accept_multiple_files=False,
+    key=f"csv_upload_{st.session_state.get('csv_upload_version', 0)}")
 
 if uploaded is not None:
-    if uploaded.size > 25 * 1024 * 1024:
+    if uploaded.size > MAX_UPLOAD_BYTES:
         st.error("The selected file is larger than 25 MB.")
         st.stop()
+    sheet_name = None
+    if Path(uploaded.name).suffix.lower() == ".xlsx":
+        try:
+            sheets = workbook_sheets(uploaded)
+            sheet_name = st.selectbox("Excel worksheet to import", sheets)
+        except DatasetValidationError as error:
+            st.error(f"Excel validation failed: {error}")
+            st.stop()
     try:
-        columns = list(pd.read_csv(uploaded, nrows=0).columns)
-        uploaded.seek(0)
+        history = UploadHistory(get_mongo().database)
+        upload_record = history.register(uploaded.name, sha256(uploaded.getbuffer()).hexdigest(), uploaded.size, sheet_name=sheet_name)
+        upload_id = upload_record["_id"]
+        st.session_state["active_upload_id"] = upload_id
+        if upload_record.get("hidden", False):
+            st.info("This file or worksheet is excluded from the dashboard. Enable Include in dashboard in the library to preview or import it again.")
+            st.stop()
+    except Exception:
+        st.error("Could not register this file in upload history. Check MongoDB, then try again.")
+        st.stop()
+    try:
+        preview = read_security_table(uploaded, filename=uploaded.name, sheet_name=sheet_name, nrows=10)
+        columns = list(preview.columns)
         dataset_type = detect_dataset_type(columns)
-        preview = pd.read_csv(uploaded, nrows=10)
-        uploaded.seek(0)
     except Exception as error:
-        st.error(f"CSV validation failed: {error}")
+        history.validation_failed(upload_id, str(error))
+        st.error(f"File validation failed: {error}")
         st.stop()
 
     st.success(f"Detected supported {dataset_type} schema with {len(columns)} columns.")
     with st.expander("Preview first 10 rows", expanded=True):
         st.dataframe(preview, width="stretch", hide_index=True)
 
-    source_name = safe_source_name(uploaded.name, dataset_type)
+    # Different content under the same filename receives separate provenance.
+    # Identical reimports keep stable provenance and duplicate protection.
+    source_name = safe_source_name(uploaded.name, dataset_type)[:80] + ":" + upload_id[:16]
+    history.validated(upload_id, dataset_type, source_name, columns)
     st.caption(f"Provenance label: `{source_name}`")
 
     with st.form("upload_detection_configuration"):
@@ -91,17 +145,25 @@ if uploaded is not None:
             third, fourth = st.columns(2)
             origin_threshold = third.number_input("Distinct IP/device threshold", 2, 10, 3)
             access_window = fourth.number_input("Suspicious-access window (minutes)", 1, 120, 10)
-            network_iqr = 3.0
-            connection_threshold = 40
+            network_probability_threshold = None
         else:
-            first, second = st.columns(2)
-            network_iqr = first.number_input(
-                "IQR multiplier", 1.0, 10.0, 3.0, 0.5,
-                help="Higher values generate fewer statistical outlier alerts."
+            model_bundle = load_model_bundle(str(DEFAULT_MODEL_PATH.resolve()))
+            calibrated_threshold = float(model_bundle["threshold"])
+            network_probability_threshold = st.number_input(
+                "Model attack-probability threshold",
+                min_value=0.01,
+                max_value=0.99,
+                value=calibrated_threshold,
+                step=0.01,
+                format="%.2f",
+                help=(
+                    "Lower values detect more attacks but may create more false positives. "
+                    "The default was selected on the validation split."
+                ),
             )
-            connection_threshold = second.number_input(
-                "Connection-count threshold", 5, 200, 40,
-                help="Triggers when recent connection-count features reach this value."
+            st.caption(
+                f"Model: {model_bundle['model_version']} · "
+                f"calibrated threshold: {calibrated_threshold:.2f}"
             )
             failed_threshold = 5
             failed_window = 5
@@ -124,15 +186,27 @@ if uploaded is not None:
             )
             st.stop()
         with st.status("Processing uploaded security events...", expanded=True) as status:
+            run_id = None
             try:
+                run_id = history.start_run(upload_id, {
+                    "failed_login_threshold": int(failed_threshold),
+                    "failed_login_window_minutes": int(failed_window),
+                    "suspicious_origin_threshold": int(origin_threshold),
+                    "suspicious_window_minutes": int(access_window),
+                    "network_probability_threshold": network_probability_threshold,
+                    "sheet_name": sheet_name,
+                })
                 status.write("1/6 — Schema identified and upload size accepted")
                 uploaded.seek(0)
+                frame = read_security_table(uploaded, filename=uploaded.name, sheet_name=sheet_name)
                 if dataset_type == "authentication":
-                    loaded = load_authentication_csv(uploaded, source_dataset=source_name)
+                    loaded = load_authentication_frame(frame, source_dataset=source_name)
+                    namespace_upload_events(loaded.events, upload_id)
                     status.write(
                         f"2/6 — Validated and normalized {loaded.report.row_count:,} authentication events"
                     )
                     def show_progress(stage: str, details: dict) -> None:
+                        history.progress(run_id, stage, details)
                         messages = {
                             "mongo_indexes_ready": "3/6 — MongoDB indexes verified",
                             "events_stored": (
@@ -163,11 +237,13 @@ if uploaded is not None:
                         progress=show_progress,
                     )
                 else:
-                    loaded = load_network_csv(uploaded, source_dataset=source_name)
+                    loaded = load_network_frame(frame, source_dataset=source_name)
+                    namespace_upload_events(loaded.events, upload_id)
                     status.write(
                         f"2/6 — Validated and normalized {loaded.report.row_count:,} network events"
                     )
                     def show_progress(stage: str, details: dict) -> None:
+                        history.progress(run_id, stage, details)
                         messages = {
                             "mongo_indexes_ready": "3/6 — MongoDB indexes verified",
                             "events_stored": (
@@ -191,81 +267,31 @@ if uploaded is not None:
                     summary = process_events(
                         network_events=loaded.events,
                         mysql=get_mysql(), mongo=get_mongo(),
-                        network_iqr_multiplier=float(network_iqr),
-                        network_connection_threshold=int(connection_threshold),
+                        network_probability_threshold=float(network_probability_threshold),
                         progress=show_progress,
                     )
                 status.update(label="Upload stored and analysed successfully", state="complete")
+                from ui.filters import filter_catalog
+                from ui.existing_sources import existing_source_counts
+                existing_source_counts.clear()
+                filter_catalog.clear()
                 result = summary.to_dict()
-                st.markdown('<div class="storage-proof">Database persistence proof</div>', unsafe_allow_html=True)
-                mongo_database = get_mongo().database
-                mongo_event_count = mongo_database.security_events.count_documents(
-                    {"source_dataset": source_name}
-                )
-                mongo_alert_count = mongo_database.security_alerts.count_documents(
-                    {"source_dataset": source_name}
-                )
-                sql_count_rows = mysql_rows(
-                    "SELECT COUNT(*) AS count FROM incidents WHERE source_dataset = %s",
-                    (source_name,),
-                )
-                sql_incident_count = int(sql_count_rows[0]["count"])
-                metric_columns = st.columns(4)
-                metric_columns[0].metric("Rows accepted", loaded.report.row_count)
-                metric_columns[1].metric("MongoDB events saved", mongo_event_count)
-                metric_columns[2].metric("MongoDB alerts saved", mongo_alert_count)
-                metric_columns[3].metric("MySQL incidents saved", sql_incident_count)
-                if result["mongo_event_duplicates"]:
-                    st.info(
-                        f"Skipped {result['mongo_event_duplicates']} duplicate events and "
-                        f"{result['mysql_incident_duplicates']} duplicate incidents."
-                    )
-                mongo_tab, sql_tab, summary_tab = st.tabs(
-                    ["MongoDB evidence", "MySQL evidence", "Technical summary"]
-                )
-                mongo_samples = list(
-                    mongo_database.security_events.find(
-                        {"source_dataset": source_name},
-                        {
-                            "_id": 0, "event_id": 1, "timestamp": 1,
-                            "event_type": 1, "user_id": 1, "source_ip": 1,
-                            "destination_ip": 1, "authentication_result": 1,
-                            "attack_category": 1,
-                        },
-                    ).sort("timestamp", -1).limit(10)
-                )
-                mongo_tab.caption(
-                    "Latest documents read back from MongoDB collection `security_events`."
-                )
-                mongo_tab.dataframe(mongo_samples, width="stretch", hide_index=True)
-
-                sql_samples = mysql_rows(
-                    """
-                    SELECT i.incident_id, i.incident_time, tc.category_name,
-                           i.severity, i.status, i.source_event_id
-                    FROM incidents i
-                    JOIN threat_categories tc ON tc.category_id = i.category_id
-                    WHERE i.source_dataset = %s
-                    ORDER BY i.incident_time DESC LIMIT 10
-                    """,
-                    (source_name,),
-                )
-                sql_tab.caption(
-                    "Latest rows read back from MySQL table `incidents` for this upload."
-                )
-                if sql_samples:
-                    sql_tab.dataframe(sql_samples, width="stretch", hide_index=True)
-                else:
-                    sql_tab.info(
-                        "No MySQL incident was created because no detection rule triggered. "
-                        "The raw events are still stored in MongoDB."
-                    )
-
-                with summary_tab:
-                    st.json(result)
+                history.finish(upload_id, run_id, summary=result)
+                label = uploaded.name + (f" / {sheet_name}" if sheet_name else "")
+                st.session_state["last_import_notice"] = f"{label}: import completed. Its results are saved in the dataset library."
+                st.session_state["csv_upload_version"] = st.session_state.get("csv_upload_version", 0) + 1
+                st.session_state.pop("active_upload_id", None)
+                st.rerun()
             except DatasetValidationError as error:
+                if run_id:
+                    history.finish(upload_id, run_id, error=str(error))
                 status.update(label="Dataset validation failed", state="error")
                 st.error(f"Dataset validation failed: {error}")
             except Exception as error:
+                if run_id:
+                    try:
+                        history.finish(upload_id, run_id, error=f"{type(error).__name__}: import did not finish. Review the recorded stages; earlier database writes may have completed.")
+                    except Exception:
+                        pass
                 status.update(label="Import failed safely", state="error")
                 st.error(f"Import failed safely: {error}")

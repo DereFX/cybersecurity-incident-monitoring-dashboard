@@ -85,5 +85,5 @@ def test_schema_detection_uses_columns_not_filename() -> None:
 def test_schema_detection_rejects_unknown_csv() -> None:
     import pytest
 
-    with pytest.raises(ValueError, match="Unsupported CSV schema"):
+    with pytest.raises(ValueError, match="Unsupported dataset schema"):
         detect_dataset_type({"one", "two"})

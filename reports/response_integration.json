@@ -1,0 +1,13 @@
+{
+  "checked_at_utc": "2026-10-27T20:02:10.618000+00:00",
+  "exit_code": 0,
+  "scope": "Live MySQL/MongoDB synthetic workflow; SQL rolled back and synthetic MongoDB documents cleaned up",
+  "counts": {
+    "tests": 3,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "source_sha256": "8f5e1ba0fea155ba24e2d58a63069914a7304bf2e7314b4280bcd9b5206f3b18",
+  "command": "python scripts/verify_project.py --integration"
+}

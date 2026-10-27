@@ -18,6 +18,13 @@ def load_network_csv(
     """Validate and normalize network flows without treating labels as detections."""
 
     frame = pd.read_csv(path)
+    return load_network_frame(frame, source_dataset=source_dataset)
+
+
+def load_network_frame(
+    frame: pd.DataFrame, *, source_dataset: str = NETWORK_SOURCE_DATASET
+) -> LoadResult:
+    """Normalize a parsed CSV or Excel table without changing the detector."""
     report = validate_dataframe(
         frame,
         source_dataset=source_dataset,

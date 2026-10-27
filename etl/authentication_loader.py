@@ -21,6 +21,13 @@ def load_authentication_csv(
     """Validate and normalize authentication events from ``path``."""
 
     frame = pd.read_csv(path)
+    return load_authentication_frame(frame, source_dataset=source_dataset)
+
+
+def load_authentication_frame(
+    frame: pd.DataFrame, *, source_dataset: str = AUTH_SOURCE_DATASET
+) -> LoadResult:
+    """Normalize a parsed CSV or Excel table through the same validation path."""
     report = validate_dataframe(
         frame,
         source_dataset=source_dataset,
@@ -30,6 +37,20 @@ def load_authentication_csv(
     )
     if not report.is_valid:
         raise DatasetValidationError("; ".join(report.errors))
+
+    frame = frame.copy()
+    for column in ("login_successful", "is_attack_ip", "is_account_takeover"):
+        def parse_boolean(value: object) -> bool:
+            if isinstance(value, str):
+                normalized = value.strip().lower()
+                if normalized in {"true", "1"}:
+                    return True
+                if normalized in {"false", "0"}:
+                    return False
+            elif pd.notna(value) and value in (True, False, 0, 1):
+                return bool(value)
+            raise DatasetValidationError(f"{column} must contain true/false or 1/0 values.")
+        frame[column] = frame[column].map(parse_boolean)
 
     timestamps = pd.to_datetime(frame["login_timestamp"], utc=True)
     events: list[NormalizedEvent] = []

@@ -9,4 +9,9 @@ tmp/
 data/pytest_tmp/
 data/raw/*
 !data/raw/.gitkeep
+!data/raw/README_DATASETS.txt
+!data/raw/rba_authentication_events_dev.csv
+!data/raw/rba_authentication_events_quickstart.csv
+!data/raw/unsw_nb15_network_events_dev.csv
+!data/raw/unsw_nb15_network_events_quickstart.csv
 data/processed/

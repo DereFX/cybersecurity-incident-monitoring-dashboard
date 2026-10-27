@@ -10,7 +10,7 @@ from typing import Any
 from database.mongo_connection import MongoDatabase
 from database.mongo_repository import SecurityEventRepository
 from database.mysql_connection import MySQLDatabase
-from detection.abnormal_activity import detect_abnormal_network_activity
+from detection.ml_network import DEFAULT_MODEL_PATH, detect_ml_network_activity
 from detection.failed_login import detect_repeated_failed_logins
 from detection.suspicious_access import detect_suspicious_access
 from etl.authentication_loader import load_authentication_csv
@@ -47,8 +47,8 @@ def process_events(
     failed_login_window_minutes: int = 5,
     suspicious_origin_threshold: int = 3,
     suspicious_window_minutes: int = 10,
-    network_iqr_multiplier: float = 3.0,
-    network_connection_threshold: int = 40,
+    network_model_path: str | Path = DEFAULT_MODEL_PATH,
+    network_probability_threshold: float | None = None,
     progress: ProgressCallback | None = None,
 ) -> PipelineSummary:
     """Persist normalized events, run configured rules, and create incidents."""
@@ -84,10 +84,10 @@ def process_events(
             minimum_distinct_origins=suspicious_origin_threshold,
             window_minutes=suspicious_window_minutes,
         ),
-        *detect_abnormal_network_activity(
+        *detect_ml_network_activity(
             network_events,
-            iqr_multiplier=network_iqr_multiplier,
-            connection_count_threshold=network_connection_threshold,
+            model_path=network_model_path,
+            probability_threshold=network_probability_threshold,
         ),
     ]
     report("detections_complete", alerts=len(alerts))

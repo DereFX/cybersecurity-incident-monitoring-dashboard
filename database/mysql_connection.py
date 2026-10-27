@@ -24,6 +24,8 @@ class MySQLDatabase:
             database=settings.mysql_database,
             user=settings.mysql_user,
             password=settings.mysql_password,
+            connection_timeout=5,
+            time_zone="+00:00",
             autocommit=False,
         )
 

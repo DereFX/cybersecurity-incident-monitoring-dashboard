@@ -13,6 +13,7 @@ RULE_CATEGORY = {
     "repeated_failed_login": "Repeated Failed Login",
     "suspicious_multi_origin_access": "Suspicious Access",
     "abnormal_network_activity": "Abnormal Network Activity",
+    "ml_network_classifier": "Abnormal Network Activity",
 }
 
 
@@ -152,4 +153,3 @@ class IncidentService:
                 }
             finally:
                 cursor.close()
-
